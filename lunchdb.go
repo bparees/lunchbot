@@ -40,6 +40,7 @@ var (
             Tags: map[string]bool{
                 "close": true,
                 "cheap": true,
+                "fast":  true,
             },
             Capacity: 8,
         },
