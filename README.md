@@ -3,14 +3,14 @@ a slackbot for picking lunch locations
 
 Interact w/ the bot with commands of the form:
 
-    @lunchbot [attr1, attr2, attr3] lunch [for N people]
+    @lunchbot [attr1, attr2, attr3] lunch [for SIZE_OF_GROUP]
 
 e.g.
 
 * `@lunchbot lunch`
 * `@lunchbot fast, cheap lunch`
-* `@lunchbot lunch for 3 people`
-* `@lunchbot fast, cheap lunch for 3 people`
+* `@lunchbot lunch for 3`
+* `@lunchbot fast, cheap lunch for 3`
 
 The bot will do its best to pick a location that has those attributes
 and can normally seat that many people.
