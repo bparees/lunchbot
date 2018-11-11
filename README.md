@@ -15,6 +15,12 @@ e.g.
 The bot will do its best to pick a location that has those attributes
 and can normally seat that many people.
 
+## Install
+
+Deploy to openshift with oc new-app:
+
+    oc new-app centos/go-toolset-7-centos7:latest~https://github.com/bparees/lunchbot
+
 ## TODO
 
 * Account for time of day and use PeakCapacity when determining whether the location can handle the group size
