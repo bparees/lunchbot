@@ -168,7 +168,7 @@ func Parse(text string) ([]string, int, error) {
 }
 
 // msg format:  tag1, tag2, tag3 lunch for 6 people
-var parser = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch.*?(\d*?)$`)
+var parser = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
 var auth_token string
 
 func main() {
