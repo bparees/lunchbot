@@ -41,7 +41,7 @@ type PostMessage struct {
     Text    string `json:"text"`
 }
 
-func sayhelloName(w http.ResponseWriter, r *http.Request) {
+func handle(w http.ResponseWriter, r *http.Request) {
     body, err := ioutil.ReadAll(r.Body)
     if err != nil {
         fmt.Printf("error: %v\n", err)
@@ -173,7 +173,7 @@ var auth_token string
 
 func main() {
     auth_token = os.Getenv("TOKEN")
-    http.HandleFunc("/", sayhelloName)       // set router
+    http.HandleFunc("/", handle)             // set router
     err := http.ListenAndServe(":8080", nil) // set listen port
     if err != nil {
         log.Fatal("ListenAndServe: ", err)
