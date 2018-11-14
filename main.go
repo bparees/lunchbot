@@ -13,6 +13,7 @@ import (
     "regexp"
     "strconv"
     "strings"
+    "time"
 )
 
 type Request struct {
@@ -159,7 +160,7 @@ func Parse(text string) ([]string, int, error) {
     tags := []string{}
     if len(matches[1]) > 0 {
         tags = strings.Split(matches[1], ",")
-        for i, _ := range tags {
+        for i := range tags {
             tags[i] = strings.TrimSpace(tags[i])
         }
     }
@@ -172,6 +173,7 @@ var parser = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
 var auth_token string
 
 func main() {
+    rand.Seed(time.Now().UTC().UnixNano())
     auth_token = os.Getenv("TOKEN")
     http.HandleFunc("/", handle)             // set router
     err := http.ListenAndServe(":8080", nil) // set listen port
