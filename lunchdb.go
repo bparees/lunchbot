@@ -16,7 +16,7 @@ var (
             Tags: map[string]bool{
                 "close": true,
             },
-            Capacity: 4,
+            Capacity: 6,
         },
         {
             Name: "Woody's",
@@ -24,8 +24,9 @@ var (
                 "close":  true,
                 "cheap":  true,
                 "burger": true,
+                "beer": true,
             },
-            Capacity: 6,
+            Capacity: 8,
         },
         {
             Name: "Vic's",
@@ -41,6 +42,7 @@ var (
                 "close": true,
                 "cheap": true,
                 "fast":  true,
+                "beer": true,
             },
             Capacity: 8,
         },
@@ -52,12 +54,12 @@ var (
         {
             Name:     "Centro",
             Tags:     map[string]bool{},
-            Capacity: 4,
+            Capacity: 6,
         },
         {
             Name:     "Jose and Sons",
             Tags:     map[string]bool{},
-            Capacity: 6,
+            Capacity: 8,
         },
         {
             Name:     "The Pit",
@@ -75,12 +77,12 @@ var (
             Tags: map[string]bool{
                 "burger": true,
             },
-            Capacity: 6,
+            Capacity: 8,
         },
         {
             Name:     "Capital Club",
             Tags:     map[string]bool{},
-            Capacity: 4,
+            Capacity: 6,
         },
         {
             Name:     "Bida Manda",
