@@ -71,16 +71,20 @@ func handle(w http.ResponseWriter, r *http.Request) {
         msg := PostMessage{}
         //msg.Token = auth_token
         msg.Channel = req.Event.Channel
-        location, err := PickLocation(req.Event.Text)
 
-        msg.Text = fmt.Sprintf("I recommend %s", location)
-        if err != nil {
+        switch {
+        case strings.Contains(req.Event.Text, "lunch"):
+            msg.Text = DoLunch(req.Event.Text)
+        case strings.Contains(req.Event.Text, "rollcall"):
+            msg.Text = DoRollCall(req.Event.Text)
+        default:
             msg.Text = fmt.Sprintf("Sorry, I couldn't process that request: %v", err)
         }
+
         // never output our own name, so we don't trigger ourselves
-        fmt.Printf("original: %s\n", msg.Text)
+        //fmt.Printf("original response: %s\n", msg.Text)
         msg.Text = strings.Replace(msg.Text, "<@UE23Q9BFY>", "lunchbot", -1)
-        fmt.Printf("replaced: %s\n", msg.Text)
+        //fmt.Printf("replaced response: %s\n", msg.Text)
 
         msgJson, _ := json.Marshal(msg)
 
@@ -103,6 +107,27 @@ func handle(w http.ResponseWriter, r *http.Request) {
         //respJson, _ := json.Marshal(resp)
         //io.WriteString(w, string(respJson))
     }
+}
+
+func DoRollCall(input string) string {
+
+    return ""
+}
+
+func DoLunch(input string) string {
+    location, err := PickLocation(input)
+
+    resp := ""
+    resp = fmt.Sprintf("I recommend %s", location)
+    if err != nil {
+        resp = fmt.Sprintf("Sorry, I couldn't process that request: %v", err)
+    }
+    // never output our own name, so we don't trigger ourselves
+    //fmt.Printf("original response: %s\n", msg.Text)
+    resp = strings.Replace(resp, "<@UE23Q9BFY>", "lunchbot", -1)
+    //fmt.Printf("replaced response: %s\n", msg.Text)
+
+    return resp
 }
 
 func PickLocation(text string) (string, error) {
