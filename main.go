@@ -13,8 +13,18 @@ import (
     "regexp"
     "strconv"
     "strings"
+    "sync"
     "time"
 )
+
+type DepartureTime struct {
+    Hour   int
+    Minute int
+}
+
+func (d DepartureTime) String() string {
+    return fmt.Sprintf("%d:%d", d.Hour, d.Minute)
+}
 
 type Request struct {
     Token string `json:"token"`
@@ -30,6 +40,7 @@ type Request struct {
 type Event struct {
     Type    string `json:"type"`
     Text    string `json:"text"`
+    User    string `json:"user"`
     Channel string `json:"channel"`
 }
 type VerificationResponse struct {
@@ -73,10 +84,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
         msg.Channel = req.Event.Channel
 
         switch {
+        case strings.Contains(req.Event.Text, "help"):
+            msg.Text = DoHelp()
         case strings.Contains(req.Event.Text, "lunch"):
             msg.Text = DoLunch(req.Event.Text)
         case strings.Contains(req.Event.Text, "rollcall"):
             msg.Text = DoRollCall(req.Event.Text)
+        case strings.Contains(req.Event.Text, "reset"):
+            msg.Text = DoReset()
+        case strings.Contains(req.Event.Text, "<@UE23Q9BFY> in"):
+            msg.Text = HandleRollCallResponse(req.Event.Text, req.Event.User)
         default:
             msg.Text = fmt.Sprintf("Sorry, I couldn't process that request: %v", err)
         }
@@ -109,18 +126,81 @@ func handle(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func DoHelp() string {
+    return helpText
+}
 func DoRollCall(input string) string {
+    mutex.Lock()
+    defer mutex.Unlock()
+    if rollCallInProgress {
+        return fmt.Sprintf("There is already a rollcall in progress.  The participant count is %d and the departure time is %d:%02d", participantCount, departureTime.Hour, departureTime.Minute)
+    }
 
-    return ""
+    rollCallInProgress = true
+    // reset the counts after 2 hours, so we're ready for the next day.
+    timer := time.NewTimer(120 * time.Minute)
+    go func() {
+        <-timer.C
+        DoReset()
+    }()
+
+    return "<!here> If you're coming to lunch, please respond with your earliest availability in the form: `@lunchbot in HH:MM`.  If you do not specify a time, 11:30 is assumed."
 }
 
+func DoReset() string {
+    mutex.Lock()
+    defer mutex.Unlock()
+    participantCount = 0
+    departureTime = DepartureTime{11, 30}
+    rollCallInProgress = false
+    return "The rollcall has been reset, to initiate a new rollcall please say `@lunchbot rollcall`"
+}
+
+func HandleRollCallResponse(input, sender string) string {
+    mutex.Lock()
+    defer mutex.Unlock()
+    if !rollCallInProgress {
+        return fmt.Sprintf("<@%s> no rollcall is in progress, you can start one by saying `@lunchbot rollcall`", sender)
+    }
+
+    matches := rollcallparser.FindStringSubmatch(input)
+    if len(matches) == 0 {
+        return fmt.Sprintf("Sorry <@%s>, I could not parse your rollcall response: %s", sender, input)
+    }
+    if len(matches) == 2 && len(matches[1]) > 0 {
+        d := matches[1]
+        bits := strings.Split(d, ":")
+        h, _ := strconv.Atoi(bits[0])
+        m, _ := strconv.Atoi(bits[1])
+        if h > departureTime.Hour {
+            departureTime.Hour = h
+            departureTime.Minute = m
+        } else if h == departureTime.Hour && m > departureTime.Minute {
+            departureTime.Minute = m
+        }
+    }
+
+    participantCount += 1
+
+    return fmt.Sprintf("Thank you <@%s>, the new participant count is %d and the earliest departure is %d:%02d", sender, participantCount, departureTime.Hour, departureTime.Minute)
+}
 func DoLunch(input string) string {
-    location, err := PickLocation(input)
+    locations, count, err := PickLocation(input)
 
     resp := ""
-    resp = fmt.Sprintf("I recommend %s", location)
     if err != nil {
         resp = fmt.Sprintf("Sorry, I couldn't process that request: %v", err)
+    } else {
+        switch len(locations) {
+        case 1:
+            resp = fmt.Sprintf("For %d people I recommend %s", count, locations[0].Name)
+        case 2:
+            resp = fmt.Sprintf("For %d people I recommend %s or %s", count, locations[0].Name, locations[1].Name)
+        case 3:
+            resp = fmt.Sprintf("For %d people I recommend %s, %s, or %s", count, locations[0].Name, locations[1].Name, locations[2].Name)
+        default:
+            resp = fmt.Sprintf("Sorry, I couldn't find any suitable locations")
+        }
     }
     // never output our own name, so we don't trigger ourselves
     //fmt.Printf("original response: %s\n", msg.Text)
@@ -130,17 +210,34 @@ func DoLunch(input string) string {
     return resp
 }
 
-func PickLocation(text string) (string, error) {
+func PickLocation(text string) ([]Location, int, error) {
     tags, groupSize, err := Parse(text)
     if err != nil {
-        return "", err
+        return []Location{}, groupSize, err
     }
     filteredLocations := FilterLocations(tags, groupSize)
     if len(filteredLocations) == 0 {
-        return "", fmt.Errorf("no locations matched the specified requirements")
+        return []Location{}, -1, fmt.Errorf("no locations matched the specified requirements")
     }
-    i := rand.Intn(len(filteredLocations))
-    return filteredLocations[i].Name, nil
+    if len(filteredLocations) <= 3 {
+        return filteredLocations, groupSize, nil
+    }
+
+    results := []Location{}
+    first := rand.Intn(len(filteredLocations))
+    results = append(results, filteredLocations[first])
+    second := -1
+    for {
+        c := rand.Intn(len(filteredLocations))
+        if c != first && c != second {
+            second = c
+            results = append(results, filteredLocations[c])
+        }
+        if len(results) == 3 {
+            break
+        }
+    }
+    return results, groupSize, nil
 }
 
 func FilterLocations(tags []string, size int) []Location {
@@ -174,7 +271,7 @@ func Parse(text string) ([]string, int, error) {
     groupSize := 0
     g := matches[len(matches)-1]
     if len(g) == 0 {
-        groupSize = -1
+        groupSize = participantCount
     } else {
         var err error
         groupSize, err = strconv.Atoi(g)
@@ -193,9 +290,27 @@ func Parse(text string) ([]string, int, error) {
     return tags, groupSize, nil
 }
 
+const ()
+
+var (
+    backtick = "`"
+    helpText = "To start a lunch rollcall, say `@lunchbot rollcall`\n" +
+        "To respond to a rollcall, say `@lunchbot in` or `@lunchbot in HH:MM` to indicate your earliest availability\n" +
+        "To reset a rollcall say `@lunchbot reset` (rollcalls automatically reset after 2 hours)\n" +
+        "To request a location suggestion, say `@lunchbot lunch` (current rollcall count will be used for location selection)\n" +
+        "To request a location with specific attributes, say `@lunchbot attr1, attr2 lunch`\n" +
+        "To request a location for a specific number of participants, say `@lunchbot lunch for N people`\n"
+
+    parser             = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
+    rollcallparser     = regexp.MustCompile(`<@UE23Q9BFY> in(?: *)(\d\d?:\d\d)?`)
+    auth_token         string
+    rollCallInProgress = false
+    participantCount   = 0
+    departureTime      = DepartureTime{11, 30}
+    mutex              = &sync.Mutex{}
+)
+
 // msg format:  tag1, tag2, tag3 lunch for 6 people
-var parser = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
-var auth_token string
 
 func main() {
     rand.Seed(time.Now().UTC().UnixNano())
