@@ -93,9 +93,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
         case strings.Contains(req.Event.Text, "reset"):
             msg.Text = DoReset()
         case strings.Contains(req.Event.Text, "<@UE23Q9BFY> in"):
-            msg.Text = HandleRollCallResponse(req.Event.Text, req.Event.User)
+            msg.Text = HandleRollCallResponseIn(req.Event.Text, req.Event.User)
+        case strings.Contains(req.Event.Text, "<@UE23Q9BFY> out"):
+            msg.Text = HandleRollCallResponseOut(req.Event.User)
         default:
-            msg.Text = fmt.Sprintf("Sorry, I couldn't process that request: %v", err)
+            msg.Text = fmt.Sprintf("Sorry, I couldn't process that request: %s", req.Event.Text)
         }
 
         // never output our own name, so we don't trigger ourselves
@@ -105,7 +107,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
         msgJson, _ := json.Marshal(msg)
 
-        fmt.Printf("msg json: %s\n", msgJson)
+        fmt.Printf("msg response json: %s\n", msgJson)
         req, err := http.NewRequest("POST", "https://slack.com/api/chat.postMessage", bytes.NewBuffer(msgJson))
         req.Header.Set("Content-Type", "application/json")
         req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth_token))
@@ -116,7 +118,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
             fmt.Printf("error posting chat message: %v", err)
             http.Error(w, err.Error(), http.StatusInternalServerError)
         }
-        fmt.Printf("chat message response: %#v\n", resp)
+        //fmt.Printf("chat message response: %#v\n", resp)
         resp.Body.Close()
 
         w.WriteHeader(http.StatusOK)
@@ -133,9 +135,10 @@ func DoRollCall(input string) string {
     mutex.Lock()
     defer mutex.Unlock()
     if rollCallInProgress {
-        return fmt.Sprintf("There is already a rollcall in progress.  The participant count is %d and the departure time is %d:%02d", participantCount, departureTime.Hour, departureTime.Minute)
+        c, d := Count()
+        return fmt.Sprintf("There is already a rollcall in progress.  The participant count is %d and the departure time is %d:%02d", c, d.Hour, d.Minute)
     }
-
+    Reset()
     rollCallInProgress = true
     // reset the counts after 2 hours, so we're ready for the next day.
     timer := time.NewTimer(120 * time.Minute)
@@ -150,13 +153,20 @@ func DoRollCall(input string) string {
 func DoReset() string {
     mutex.Lock()
     defer mutex.Unlock()
-    participantCount = 0
-    departureTime = DepartureTime{11, 30}
-    rollCallInProgress = false
+    //participantCount = 0
+    //departureTime = DepartureTime{11, 30}
+    //participants = make(map[string]DepartureTime)
+    //rollCallInProgress = false
+    Reset()
     return "The rollcall has been reset, to initiate a new rollcall please say `@lunchbot rollcall`"
 }
 
-func HandleRollCallResponse(input, sender string) string {
+func Reset() {
+    participants = make(map[string]DepartureTime)
+    rollCallInProgress = false
+}
+
+func HandleRollCallResponseIn(input, sender string) string {
     mutex.Lock()
     defer mutex.Unlock()
     if !rollCallInProgress {
@@ -167,23 +177,58 @@ func HandleRollCallResponse(input, sender string) string {
     if len(matches) == 0 {
         return fmt.Sprintf("Sorry <@%s>, I could not parse your rollcall response: %s", sender, input)
     }
+    participantTime := DepartureTime{11, 30}
     if len(matches) == 2 && len(matches[1]) > 0 {
         d := matches[1]
         bits := strings.Split(d, ":")
         h, _ := strconv.Atoi(bits[0])
         m, _ := strconv.Atoi(bits[1])
-        if h > departureTime.Hour {
-            departureTime.Hour = h
-            departureTime.Minute = m
-        } else if h == departureTime.Hour && m > departureTime.Minute {
-            departureTime.Minute = m
+        if h < 11 || h > 13 {
+            return fmt.Sprintf("<@%s>, please use 24-hour time with an hour of 11, 12, or 13.", sender)
         }
+        if m < 0 || m > 59 {
+            return fmt.Sprintf("<@%s>, %d is not a valid minute value.", sender, m)
+        }
+        participantTime.Hour = h
+        participantTime.Minute = m
+        /*
+           if h > departureTime.Hour {
+               departureTime.Hour = h
+               departureTime.Minute = m
+           } else if h == departureTime.Hour && m > departureTime.Minute {
+               departureTime.Minute = m
+           }
+        */
     }
 
-    participantCount += 1
+    _, exists := participants[sender]
+    //participantCount += 1
+    participants[sender] = participantTime
+    count, departureTime := Count()
 
-    return fmt.Sprintf("Thank you <@%s>, the new participant count is %d and the earliest departure is %d:%02d", sender, participantCount, departureTime.Hour, departureTime.Minute)
+    if exists {
+        return fmt.Sprintf("Thank you <@%s>, your response has been updated. The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
+    }
+    return fmt.Sprintf("Thank you <@%s>, the new participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
 }
+
+func HandleRollCallResponseOut(sender string) string {
+    mutex.Lock()
+    defer mutex.Unlock()
+    if !rollCallInProgress {
+        return fmt.Sprintf("<@%s> no rollcall is in progress, you can start one by saying `@lunchbot rollcall`", sender)
+    }
+
+    _, exists := participants[sender]
+    if exists {
+        delete(participants, sender)
+        count, departureTime := Count()
+        return fmt.Sprintf("Thank you <@%s>, you have been removed from the list of participants. The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
+    }
+    count, departureTime := Count()
+    return fmt.Sprintf("<@%s>, you were not in the participant list.  The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
+}
+
 func DoLunch(input string) string {
     locations, count, err := PickLocation(input)
 
@@ -271,7 +316,8 @@ func Parse(text string) ([]string, int, error) {
     groupSize := 0
     g := matches[len(matches)-1]
     if len(g) == 0 {
-        groupSize = participantCount
+        c, _ := Count()
+        groupSize = c
     } else {
         var err error
         groupSize, err = strconv.Atoi(g)
@@ -290,12 +336,26 @@ func Parse(text string) ([]string, int, error) {
     return tags, groupSize, nil
 }
 
-const ()
+func Count() (int, DepartureTime) {
+    departureTime := DepartureTime{11, 30}
+    count := 0
+    for _, v := range participants {
+        if v.Hour > departureTime.Hour {
+            departureTime.Hour = v.Hour
+            departureTime.Minute = v.Minute
+        } else if v.Hour == departureTime.Hour && v.Minute > departureTime.Minute {
+            departureTime.Minute = v.Minute
+        }
+        count += 1
+    }
+    return count, departureTime
+}
 
 var (
     backtick = "`"
     helpText = "To start a lunch rollcall, say `@lunchbot rollcall`\n" +
         "To respond to a rollcall, say `@lunchbot in` or `@lunchbot in HH:MM` to indicate your earliest availability\n" +
+        "To remove yourself from a rollcall, say `@lunchbot out`\n" +
         "To reset a rollcall say `@lunchbot reset` (rollcalls automatically reset after 2 hours)\n" +
         "To request a location suggestion, say `@lunchbot lunch` (current rollcall count will be used for location selection)\n" +
         "To request a location with specific attributes, say `@lunchbot attr1, attr2 lunch`\n" +
@@ -305,9 +365,10 @@ var (
     rollcallparser     = regexp.MustCompile(`<@UE23Q9BFY> in(?: *)(\d\d?:\d\d)?`)
     auth_token         string
     rollCallInProgress = false
-    participantCount   = 0
-    departureTime      = DepartureTime{11, 30}
-    mutex              = &sync.Mutex{}
+    //participantCount   = 0
+    participants = make(map[string]DepartureTime)
+    //departureTime      = DepartureTime{11, 30}
+    mutex = &sync.Mutex{}
 )
 
 // msg format:  tag1, tag2, tag3 lunch for 6 people
