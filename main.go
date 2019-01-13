@@ -42,6 +42,7 @@ type Event struct {
     Text    string `json:"text"`
     User    string `json:"user"`
     Channel string `json:"channel"`
+    TS      string `json:"ts"`
 }
 type VerificationResponse struct {
     Challenge string `json:"challenge"`
@@ -77,7 +78,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
     }
 
     if req.Type == "event_callback" {
-        fmt.Printf("saw message text: %s\n", req.Event.Text)
+        if _, found := msgCache[req.Event.TS]; found {
+            fmt.Printf("ignoring dupe event: %#v\n", req.Event)
+        }
+        msgCache[req.Event.TS] = struct{}{}
+        fmt.Printf("saw message event: %#v\n", req.Event)
 
         msg := PostMessage{}
         //msg.Token = auth_token
@@ -140,8 +145,8 @@ func DoRollCall(input string) string {
     }
     Reset()
     rollCallInProgress = true
-    // reset the counts after 2 hours, so we're ready for the next day.
-    timer := time.NewTimer(120 * time.Minute)
+    // reset the counts after 3 hours, so we're ready for the next day.
+    timer := time.NewTimer(180 * time.Minute)
     go func() {
         <-timer.C
         DoReset()
@@ -164,6 +169,7 @@ func DoReset() string {
 func Reset() {
     participants = make(map[string]DepartureTime)
     rollCallInProgress = false
+    msgCache = make(map[string]struct{})
 }
 
 func HandleRollCallResponseIn(input, sender string) string {
@@ -303,7 +309,7 @@ OUTER:
             }
         }
         candidates = append(candidates, l)
-        fmt.Printf("candidates is now %q\n", candidates)
+        //fmt.Printf("candidates is now %q\n", candidates)
     }
     return candidates
 }
@@ -367,6 +373,7 @@ var (
     rollCallInProgress = false
     //participantCount   = 0
     participants = make(map[string]DepartureTime)
+    msgCache     = make(map[string]struct{})
     //departureTime      = DepartureTime{11, 30}
     mutex = &sync.Mutex{}
 )
