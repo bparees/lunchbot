@@ -17,6 +17,11 @@ import (
     "time"
 )
 
+type Participant struct {
+    DepartureTime DepartureTime
+    In            bool
+    Name          string
+}
 type DepartureTime struct {
     Hour   int
     Minute int
@@ -54,6 +59,17 @@ type PostMessage struct {
     Text    string `json:"text"`
 }
 
+type UserLookupRequest struct {
+    User string `json:"user"`
+}
+
+type User struct {
+    Name string `json:"name"`
+}
+type UserLookupResponse struct {
+    User User `json:"user"`
+}
+
 func handle(w http.ResponseWriter, r *http.Request) {
     body, err := ioutil.ReadAll(r.Body)
     if err != nil {
@@ -67,6 +83,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
         http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
+
     //fmt.Printf("struct: %#v", req)
     if req.Type == "url_verification" {
         resp := VerificationResponse{Challenge: req.Challenge}
@@ -78,10 +95,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
     }
 
     if req.Type == "event_callback" {
+
+        mutex.Lock()
         if _, found := msgCache[req.Event.TS]; found {
             fmt.Printf("ignoring dupe event: %#v\n", req.Event)
+            w.WriteHeader(http.StatusOK)
+            mutex.Unlock()
+            return
         }
         msgCache[req.Event.TS] = struct{}{}
+        mutex.Unlock()
         fmt.Printf("saw message event: %#v\n", req.Event)
 
         msg := PostMessage{}
@@ -127,10 +150,40 @@ func handle(w http.ResponseWriter, r *http.Request) {
         resp.Body.Close()
 
         w.WriteHeader(http.StatusOK)
-
         //respJson, _ := json.Marshal(resp)
         //io.WriteString(w, string(respJson))
     }
+}
+
+func LookupUser(user string) string {
+    fmt.Printf("looking up user: %s\n", user)
+
+    req, err := http.NewRequest("GET", fmt.Sprintf("https://slack.com/api/users.info?user=%s&token=%s", user, auth_token), nil)
+    //req.Header.Set("Content-Type", "application/json")
+    //req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", auth_token))
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Printf("error posting user lookup message: %v\n", err)
+        return ""
+    }
+    if resp.StatusCode != 200 {
+        fmt.Printf("lookup response error: %s\n", resp.StatusCode)
+        return ""
+    }
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Printf("error reading lookup response body: %v\n", err)
+        return ""
+    }
+    lookupResponse := UserLookupResponse{}
+    fmt.Sprintf("response: %s", string(body))
+    if err := json.Unmarshal([]byte(body), &lookupResponse); err != nil {
+        fmt.Printf("error reading lookup response: %v\n", err)
+        return ""
+    }
+    return lookupResponse.User.Name
 }
 
 func DoHelp() string {
@@ -158,16 +211,12 @@ func DoRollCall(input string) string {
 func DoReset() string {
     mutex.Lock()
     defer mutex.Unlock()
-    //participantCount = 0
-    //departureTime = DepartureTime{11, 30}
-    //participants = make(map[string]DepartureTime)
-    //rollCallInProgress = false
     Reset()
     return "The rollcall has been reset, to initiate a new rollcall please say `@lunchbot rollcall`"
 }
 
 func Reset() {
-    participants = make(map[string]DepartureTime)
+    participants = make(map[string]Participant)
     rollCallInProgress = false
     msgCache = make(map[string]struct{})
 }
@@ -197,19 +246,13 @@ func HandleRollCallResponseIn(input, sender string) string {
         }
         participantTime.Hour = h
         participantTime.Minute = m
-        /*
-           if h > departureTime.Hour {
-               departureTime.Hour = h
-               departureTime.Minute = m
-           } else if h == departureTime.Hour && m > departureTime.Minute {
-               departureTime.Minute = m
-           }
-        */
     }
 
     _, exists := participants[sender]
-    //participantCount += 1
-    participants[sender] = participantTime
+    participants[sender] = Participant{
+        In:            true,
+        DepartureTime: participantTime,
+    }
     count, departureTime := Count()
 
     if exists {
@@ -224,15 +267,15 @@ func HandleRollCallResponseOut(sender string) string {
     if !rollCallInProgress {
         return fmt.Sprintf("<@%s> no rollcall is in progress, you can start one by saying `@lunchbot rollcall`", sender)
     }
-
-    _, exists := participants[sender]
-    if exists {
-        delete(participants, sender)
-        count, departureTime := Count()
-        return fmt.Sprintf("Thank you <@%s>, you have been removed from the list of participants. The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
+    user := LookupUser(sender)
+    fmt.Printf("found user: %s\n", user)
+    p := Participant{
+        In:   false,
+        Name: user,
     }
+    participants[sender] = p
     count, departureTime := Count()
-    return fmt.Sprintf("<@%s>, you were not in the participant list.  The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
+    return fmt.Sprintf("Thank you <@%s>, you have been removed from the list of participants. The participant count is %d and the earliest departure is %d:%02d", sender, count, departureTime.Hour, departureTime.Minute)
 }
 
 func DoLunch(input string) string {
@@ -254,11 +297,21 @@ func DoLunch(input string) string {
         }
     }
     participantList := ""
-    for p := range participants {
-        participantList = fmt.Sprintf("<@%s> ", p)
+    outList := ""
+    for k, p := range participants {
+        if p.In {
+            participantList = fmt.Sprintf("<@%s> %s", k, participantList)
+        }
+        if !p.In && p.Name != "" {
+            outList = fmt.Sprintf("%s %s", p.Name, outList)
+        }
     }
 
-    return fmt.Sprintf("%s it's time for lunch!  %s", participantList, resp)
+    r := fmt.Sprintf("%s it's time for lunch!  %s\n", participantList, resp)
+    if len(outList) > 0 {
+        r = fmt.Sprintf("%sFYI the following people are out: %s", r, outList)
+    }
+    return r
 }
 
 func PickLocation(text string) ([]Location, int, error) {
@@ -346,11 +399,14 @@ func Count() (int, DepartureTime) {
     departureTime := DepartureTime{11, 30}
     count := 0
     for _, v := range participants {
-        if v.Hour > departureTime.Hour {
-            departureTime.Hour = v.Hour
-            departureTime.Minute = v.Minute
-        } else if v.Hour == departureTime.Hour && v.Minute > departureTime.Minute {
-            departureTime.Minute = v.Minute
+        if !v.In {
+            continue
+        }
+        if v.DepartureTime.Hour > departureTime.Hour {
+            departureTime.Hour = v.DepartureTime.Hour
+            departureTime.Minute = v.DepartureTime.Minute
+        } else if v.DepartureTime.Hour == departureTime.Hour && v.DepartureTime.Minute > departureTime.Minute {
+            departureTime.Minute = v.DepartureTime.Minute
         }
         count += 1
     }
@@ -372,7 +428,7 @@ var (
     auth_token         string
     rollCallInProgress = false
     //participantCount   = 0
-    participants = make(map[string]DepartureTime)
+    participants = make(map[string]Participant)
     msgCache     = make(map[string]struct{})
     //departureTime      = DepartureTime{11, 30}
     mutex = &sync.Mutex{}
