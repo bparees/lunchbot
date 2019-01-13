@@ -247,12 +247,12 @@ func DoLunch(input string) string {
             resp = fmt.Sprintf("Sorry, I couldn't find any suitable locations")
         }
     }
-    // never output our own name, so we don't trigger ourselves
-    //fmt.Printf("original response: %s\n", msg.Text)
-    resp = strings.Replace(resp, "<@UE23Q9BFY>", "lunchbot", -1)
-    //fmt.Printf("replaced response: %s\n", msg.Text)
+    participantList := ""
+    for p := range participants {
+        participantList = fmt.Sprintf("<@%s> ", p)
+    }
 
-    return resp
+    return fmt.Sprintf("%s it's time for lunch!  %s", participantList, resp)
 }
 
 func PickLocation(text string) ([]Location, int, error) {
