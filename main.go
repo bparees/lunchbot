@@ -114,7 +114,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
         switch {
         case strings.Contains(req.Event.Text, "help"):
             msg.Text = DoHelp()
-        case strings.Contains(req.Event.Text, "lunch"):
+        case strings.Contains(req.Event.Text, " lunch"):
             msg.Text = DoLunch(req.Event.Text)
         case strings.Contains(req.Event.Text, "rollcall"):
             msg.Text = DoRollCall(req.Event.Text)
@@ -130,7 +130,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
         // never output our own name, so we don't trigger ourselves
         //fmt.Printf("original response: %s\n", msg.Text)
-        msg.Text = strings.Replace(msg.Text, "<@UE23Q9BFY>", "lunchbot", -1)
+        msg.Text = strings.Replace(msg.Text, "@UE23Q9BFY", "lunchbot", -1)
         //fmt.Printf("replaced response: %s\n", msg.Text)
 
         msgJson, _ := json.Marshal(msg)
