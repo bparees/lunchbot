@@ -114,6 +114,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
         switch {
         case strings.Contains(req.Event.Text, "help"):
             msg.Text = DoHelp()
+        case strings.Contains(req.Event.Text, "snack"):
+            msg.Text = DoSnack()
         case strings.Contains(req.Event.Text, " lunch"):
             msg.Text = DoLunch(req.Event.Text)
         case strings.Contains(req.Event.Text, "rollcall"):
@@ -189,6 +191,24 @@ func LookupUser(user string) string {
 func DoHelp() string {
     return helpText
 }
+
+func DoSnack() string {
+    response, err := http.Get("https://redhatmain.southernfoodservice.com/Menu/Weekly")
+    if err != nil {
+        return fmt.Sprintf("Sorry, I got an error retrieving the snack menu: %v", err)
+    }
+    defer response.Body.Close()
+    contents, err := ioutil.ReadAll(response.Body)
+    if err != nil {
+        return fmt.Sprintf("Sorry, I got an error retrieving the snack menu: %v", err)
+    }
+    groups := snack.FindStringSubmatch(string(contents))
+    if len(groups) < 2 {
+        return "Sorry, I could not determine the snack, you can look at the menu here: https://redhatmain.southernfoodservice.com/Menu/Weekly"
+    }
+    return fmt.Sprintf("<!here> it's snack time, the snack is %s", groups[1])
+}
+
 func DoRollCall(input string) string {
     mutex.Lock()
     defer mutex.Unlock()
@@ -425,6 +445,7 @@ var (
 
     parser             = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
     rollcallparser     = regexp.MustCompile(`<@UE23Q9BFY> in(?: *)(\d\d?:\d\d)?`)
+    snack              = regexp.MustCompile("SNACK.*?\"name\":\"(.*?)\"")
     auth_token         string
     rollCallInProgress = false
     //participantCount   = 0
