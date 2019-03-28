@@ -22,6 +22,7 @@ var (
             Name: "Woody's",
             Tags: map[string]bool{
                 "close":  true,
+                "fast": true,
                 "cheap":  true,
                 "burger": true,
                 "beer": true,
@@ -33,6 +34,7 @@ var (
             Tags: map[string]bool{
                 "close": true,
                 "cheap": true,
+                "fast": true,
             },
             Capacity: 8,
         },
