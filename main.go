@@ -118,6 +118,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
             msg.Text = DoSnack()
         case strings.Contains(req.Event.Text, " lunch"):
             msg.Text = DoLunch(req.Event.Text)
+        case strings.Contains(req.Event.Text, " status"):
+            msg.Text = DoStatus(req.Event.Text)
         case strings.Contains(req.Event.Text, "rollcall"):
             msg.Text = DoRollCall(req.Event.Text)
         case strings.Contains(req.Event.Text, "reset"):
@@ -228,6 +230,25 @@ func DoRollCall(input string) string {
     return "<!here> If you're coming to lunch, please respond with your earliest availability in the form: `@lunchbot in HH:MM`.  If you do not specify a time, 11:30 is assumed."
 }
 
+func DoStatus(input string) string {
+    participantList := ""
+    outList := ""
+    for _, p := range participants {
+        if p.In && p.Name != "" {
+            participantList = fmt.Sprintf("%s(%s) %s", p.Name, p.DepartureTime, participantList)
+        }
+        if !p.In && p.Name != "" {
+            outList = fmt.Sprintf("%s %s", p.Name, outList)
+        }
+    }
+
+    r := fmt.Sprintf("The following people are in: %s\n", participantList)
+    if len(outList) > 0 {
+        r = fmt.Sprintf("%sThe following people are out: %s", r, outList)
+    }
+    return r
+}
+
 func DoReset() string {
     mutex.Lock()
     defer mutex.Unlock()
@@ -272,6 +293,13 @@ func HandleRollCallResponseIn(input, sender string) string {
     participants[sender] = Participant{
         In:            true,
         DepartureTime: participantTime,
+    }
+    if len(participants[sender].Name) == 0 {
+        user := LookupUser(sender)
+        fmt.Printf("found user: %s\n", user)
+        p := participants[sender]
+        p.Name = user
+        participants[sender] = p
     }
     count, departureTime := Count()
 
