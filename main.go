@@ -28,7 +28,7 @@ type DepartureTime struct {
 }
 
 func (d DepartureTime) String() string {
-    return fmt.Sprintf("%d:%d", d.Hour, d.Minute)
+    return fmt.Sprintf("%d:%02d", d.Hour, d.Minute)
 }
 
 type Request struct {
