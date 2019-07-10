@@ -22,10 +22,10 @@ var (
             Name: "Woody's",
             Tags: map[string]bool{
                 "close":  true,
-                "fast": true,
+                "fast":   true,
                 "cheap":  true,
                 "burger": true,
-                "beer": true,
+                "beer":   true,
             },
             Capacity: 8,
         },
@@ -34,7 +34,7 @@ var (
             Tags: map[string]bool{
                 "close": true,
                 "cheap": true,
-                "fast": true,
+                "fast":  true,
             },
             Capacity: 8,
         },
@@ -44,7 +44,7 @@ var (
                 "close": true,
                 "cheap": true,
                 "fast":  true,
-                "beer": true,
+                "beer":  true,
             },
             Capacity: 8,
         },
@@ -90,6 +90,11 @@ var (
             Name:     "Bida Manda",
             Tags:     map[string]bool{},
             Capacity: 6,
+        },
+        {
+            Name:     "Transfer Co",
+            Tags:     map[string]bool{},
+            Capacity: 12,
         },
     }
 )
