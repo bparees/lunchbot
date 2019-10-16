@@ -474,7 +474,9 @@ var (
         "To request a location suggestion, say `@lunchbot lunch` (current rollcall count will be used for location selection)\n" +
         "To request a location with specific attributes, say `@lunchbot attr1, attr2 lunch`\n" +
         "To request a location for a specific number of participants, say `@lunchbot lunch for N people`\n" +
-        "To check the current participant responses, say `@lunchbot status`\n"
+        "To check the current participant responses, say `@lunchbot status`\n" +
+        "To check on the weekly snack, say `@lunchbot check snack`\n" +
+        "To notify the channel about the snack, say `@lunchbot snack`\n"
 
     parser             = regexp.MustCompile(`<@UE23Q9BFY> (.*?)lunch(?: for )?(\d*)`)
     rollcallparser     = regexp.MustCompile(`<@UE23Q9BFY> in(?: *)(\d\d?:\d\d)?`)
