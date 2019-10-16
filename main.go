@@ -115,7 +115,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
         case strings.Contains(req.Event.Text, "help"):
             msg.Text = DoHelp()
         case strings.Contains(req.Event.Text, "snack"):
-            msg.Text = DoSnack()
+            msg.Text = DoSnack(true)
+        case strings.Contains(req.Event.Text, "check snack"):
+            msg.Text = DoSnack(false)
         case strings.Contains(req.Event.Text, " lunch"):
             msg.Text = DoLunch(req.Event.Text)
         case strings.Contains(req.Event.Text, " status"):
@@ -194,7 +196,7 @@ func DoHelp() string {
     return helpText
 }
 
-func DoSnack() string {
+func DoSnack(announce bool) string {
     response, err := http.Get("https://redhatmain.southernfoodservice.com/Menu/Weekly")
     if err != nil {
         return fmt.Sprintf("Sorry, I got an error retrieving the snack menu: %v", err)
@@ -208,7 +210,10 @@ func DoSnack() string {
     if len(groups) < 2 {
         return "Sorry, I could not determine the snack, you can look at the menu here: https://redhatmain.southernfoodservice.com/Menu/Weekly"
     }
-    return fmt.Sprintf("<!here> it's snack time, the snack is %s", groups[1])
+    if announce {
+        return fmt.Sprintf("<!here> it's snack time, the snack is %s", groups[1])
+    }
+    return fmt.Sprintf("Today's snack is %s", groups[1])
 }
 
 func DoRollCall(input string) string {
