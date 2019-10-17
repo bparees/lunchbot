@@ -213,7 +213,7 @@ func DoSnack(announce bool) string {
     if announce {
         return fmt.Sprintf("<!here> it's snack time, the snack is %s", groups[1])
     }
-    return fmt.Sprintf("Today's snack is %s", groups[1])
+    return fmt.Sprintf("This week's snack is(was) %s", groups[1])
 }
 
 func DoRollCall(input string) string {
