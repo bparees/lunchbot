@@ -1,0 +1,20 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: lunchbot
+    app.kubernetes.io/component: lunchbot
+    app.kubernetes.io/instance: lunchbot
+  name: lunchbot
+  namespace: bparees
+spec:
+  port:
+    targetPort: 8080
+  subdomain: ""
+  tls:
+    termination: edge
+  to:
+    kind: Service
+    name: lunchbot
+    weight: 100
+  wildcardPolicy: None

@@ -1,0 +1,13 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  annotations:
+    openshift.io/generated-by: OpenShiftNewApp
+  labels:
+    app: lunchbot
+    app.kubernetes.io/component: lunchbot
+    app.kubernetes.io/instance: lunchbot
+  name: lunchbot
+spec:
+  lookupPolicy:
+    local: false

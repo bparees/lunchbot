@@ -1,0 +1,35 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  annotations:
+    openshift.io/generated-by: OpenShiftNewApp
+  labels:
+    app: lunchbot
+    app.kubernetes.io/component: lunchbot
+    app.kubernetes.io/instance: lunchbot
+  name: lunchbot
+spec:
+  failedBuildsHistoryLimit: 5
+  nodeSelector: null
+  output:
+    to:
+      kind: ImageStreamTag
+      name: lunchbot:latest
+  postCommit: {}
+  resources: {}
+  runPolicy: Serial
+  source:
+    git:
+      uri: https://github.com/bparees/lunchbot
+    type: Git
+  strategy:
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        name: go-toolset-7-centos7:latest
+    type: Source
+  successfulBuildsHistoryLimit: 5
+  - type: ConfigChange
+  - imageChange:
+      lastTriggeredImageID: centos/go-toolset-7-centos7@sha256:f515aea549980c0d2595fc9b7a9cc2e5822be952889a200f2bb9954619ceafe3
+    type: ImageChange
